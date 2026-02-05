@@ -198,7 +198,7 @@ router.put('/:clinicId', verifyToken, async (req, res) => {
         }
         
         Object.keys(req.body).forEach(key => {
-        clinic[key] = req.body[key];
+          clinic[key] = req.body[key];
         });
     
         await clinic.save();
