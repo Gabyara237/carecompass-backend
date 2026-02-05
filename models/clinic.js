@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 // Constants
-const LANGUAGES = ['en', 'es', 'ht', 'zh', 'ar', 'vi', 'ko', 'ru', 'tl', 'fr', 'pt'];
+const LANGUAGES = ['en', 'es', 'ht', 'zh', 'ar', 'vi', 'ko', 'ru', 'tl', 'fr', 'pt','hi'];
 
 const SPECIALTIES = [
   'primary_care',
@@ -97,7 +97,12 @@ const clinicSchema = new mongoose.Schema(
         trim: true
       
     },
-
+    
+    googleMapsUrl: {
+        type: String,
+        trim: true
+    },
+    
     location: {
         type: {
             type: String,
@@ -217,12 +222,17 @@ clinicSchema.methods.calculateAverageRating = function () {
     return this.averageRating;
 };
 
-// Middleware
-clinicSchema.pre('save', function (next) {
+
+clinicSchema.set('toJSON', { virtuals: true });
+clinicSchema.set('toObject', { virtuals: true });
+
+
+
+clinicSchema.pre('save', function () {
+
     if (this.isModified('reviews')) {
         this.calculateAverageRating();
     }
-    next();
 });
 
 const Clinic = mongoose.model('Clinic', clinicSchema);
