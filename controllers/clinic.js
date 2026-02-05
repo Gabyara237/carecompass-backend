@@ -161,20 +161,20 @@ router.get('/:clinicId', async (req, res)=> {
         .populate('reviews.user', 'firstName lastName')
 
         if (!clinic) {
-        return res.status(404).json({err: 'Clinic not found'});
+          return res.status(404).json({err: 'Clinic not found'});
         }
 
         res.json({clinic});
     } catch (err) {
         if (err.kind === 'ObjectId') {
-        return res.status(404).json({err: 'Clinic not found'});
+          return res.status(404).json({err: 'Clinic not found'});
         }
         res.status(500).json({ err: err.message});
     }
 });
 
 
-router.post('/', async(req, res) => {
+router.post('/', verifyToken, async(req, res) => {
 
     try {
         const clinic = await Clinic.create(req.body);
@@ -194,7 +194,7 @@ router.put('/:clinicId', verifyToken, async (req, res) => {
         const clinic = await Clinic.findById(req.params.clinicId);
 
         if (!clinic) {
-        return res.status(404).json({err: 'Clinic not found'});
+          return res.status(404).json({err: 'Clinic not found'});
         }
         
         Object.keys(req.body).forEach(key => {
@@ -206,11 +206,11 @@ router.put('/:clinicId', verifyToken, async (req, res) => {
         res.json({ clinic });
     } catch (err) {
         if (err.name === 'ValidationError') {
-        const messages = Object.values(err.errors).map(error => error.message);
-        return res.status(400).json({err: messages.join(', ')});
+          const messages = Object.values(err.errors).map(error => error.message);
+          return res.status(400).json({err: messages.join(', ')});
         }
         if (err.kind === 'ObjectId') {
-        return res.status(404).json({err: 'Clinic not found' });
+          return res.status(404).json({err: 'Clinic not found' });
         }
         res.status(500).json({ err: err.message});
     }
@@ -222,13 +222,13 @@ router.delete('/:clinicId', verifyToken, async (req, res) => {
         const clinic = await Clinic.findByIdAndDelete(req.params.clinicId);
 
         if (!clinic) {
-        return res.status(404).json({err: 'Clinic not found'});
+          return res.status(404).json({err: 'Clinic not found'});
         }
 
         res.json({ message: 'Clinic deleted successfully'});
     } catch (err) {
         if (err.kind === 'ObjectId') {
-        return res.status(404).json({err: 'Clinic not found'});
+          return res.status(404).json({err: 'Clinic not found'});
         }
         res.status(500).json({ err: err.message});
     }
