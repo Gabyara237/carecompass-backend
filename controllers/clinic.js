@@ -4,6 +4,8 @@ const router = express.Router();
 const { Clinic } = require('../models/clinic');
 const verifyToken = require('../middleware/verify-token');
 
+const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
+
 
 router.get('/', async (req, res) => {
   try {
@@ -155,83 +157,128 @@ router.get('/nearby', async (req, res)=> {
 });
 
 
-router.get('/:clinicId', async (req, res)=> {
-    try {
-        const clinic = await Clinic.findById(req.params.clinicId)
-        .populate('reviews.user', 'firstName lastName')
+router.get('/geocode', async (req, res) => {
+  try {
+    const {q} =req.query;
 
-        if (!clinic) {
-          return res.status(404).json({err: 'Clinic not found'});
-        }
-
-        res.json({clinic});
-    } catch (err) {
-        if (err.kind === 'ObjectId') {
-          return res.status(404).json({err: 'Clinic not found'});
-        }
-        res.status(500).json({ err: err.message});
+    if (!q || !q.trim()) {
+      return res.status(400).json({err:'Query "q" is required'});
     }
+
+    const url= `${NOMINATIM_URL}?q=${encodeURIComponent(q.trim())}`+ `&format=json&limit=1&countrycodes=us&addressdetails=1`;
+
+    const response= await fetch(url,{
+      headers:{
+        'User-Agent': 'CareCompass/1.0 (hackathon demo)',
+        'Accept-Language': 'en',
+      },
+    });
+
+    if (!response.ok) {
+      return res.status(502).json({err:'Geocoding service error'});
+    }
+
+    const data = await response.json();
+
+    if (!data || data.length === 0) {
+      return res.json({success:true,found:false , data:null});
+    }
+
+    const top = data[0];
+
+    return res.json({
+      success: true,
+      found: true,
+      data: {
+        lat: parseFloat(top.lat),
+        lng: parseFloat(top.lon),
+        displayName: top.display_name,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({err: err.message});
+  }
+});
+
+
+
+router.get('/:clinicId', async (req, res)=> {
+  try {
+    const clinic = await Clinic.findById(req.params.clinicId)
+      .populate('reviews.user', 'firstName lastName')
+
+    if (!clinic) {
+      return res.status(404).json({err: 'Clinic not found'});
+    }
+
+    res.json({clinic});
+  }catch (err) {
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({err: 'Clinic not found'});
+    }
+    res.status(500).json({ err: err.message});
+  }
 });
 
 
 router.post('/', verifyToken, async(req, res) => {
 
-    try {
-        const clinic = await Clinic.create(req.body);
+  try {
+    const clinic = await Clinic.create(req.body);
         
-        res.status(201).json(clinic);
-    } catch (err) {
-      res.status(500).json({err: err.message})
+    res.status(201).json(clinic);
+  } catch (err) {
+    res.status(500).json({err: err.message})
 
-    }
+  }
 });
 
 
 
 router.put('/:clinicId', verifyToken, async (req, res) => {
-    try {
+  try {
         
-        const clinic = await Clinic.findById(req.params.clinicId);
+    const clinic = await Clinic.findById(req.params.clinicId);
 
-        if (!clinic) {
-          return res.status(404).json({err: 'Clinic not found'});
-        }
-        
-        Object.keys(req.body).forEach(key => {
-          clinic[key] = req.body[key];
-        });
-    
-        await clinic.save();
-
-        res.json({ clinic });
-    } catch (err) {
-        if (err.name === 'ValidationError') {
-          const messages = Object.values(err.errors).map(error => error.message);
-          return res.status(400).json({err: messages.join(', ')});
-        }
-        if (err.kind === 'ObjectId') {
-          return res.status(404).json({err: 'Clinic not found' });
-        }
-        res.status(500).json({ err: err.message});
+    if (!clinic) {
+      return res.status(404).json({err: 'Clinic not found'});
     }
+        
+    Object.keys(req.body).forEach(key => {
+      clinic[key] = req.body[key];
+    });
+    
+    await clinic.save();
+
+    res.json({ clinic });
+  }catch (err) {
+    if (err.name === 'ValidationError') {
+      const messages = Object.values(err.errors).map(error => error.message);
+        return res.status(400).json({err: messages.join(', ')});
+    }
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({err: 'Clinic not found' });
+    }
+      res.status(500).json({ err: err.message});
+  }
 });
 
 
 router.delete('/:clinicId', verifyToken, async (req, res) => {
-    try {
-        const clinic = await Clinic.findByIdAndDelete(req.params.clinicId);
+  try {
+    const clinic = await Clinic.findByIdAndDelete(req.params.clinicId);
 
-        if (!clinic) {
-          return res.status(404).json({err: 'Clinic not found'});
-        }
-
-        res.json({ message: 'Clinic deleted successfully'});
-    } catch (err) {
-        if (err.kind === 'ObjectId') {
-          return res.status(404).json({err: 'Clinic not found'});
-        }
-        res.status(500).json({ err: err.message});
+    if (!clinic) {
+      return res.status(404).json({err: 'Clinic not found'});
     }
+
+      res.json({ message: 'Clinic deleted successfully'});
+  } catch (err) {
+      if (err.kind === 'ObjectId') {
+        return res.status(404).json({err: 'Clinic not found'});
+      }
+      res.status(500).json({ err: err.message});
+  }
 });
 
 
