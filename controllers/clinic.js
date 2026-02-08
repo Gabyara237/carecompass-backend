@@ -205,7 +205,7 @@ router.get('/geocode', async (req, res) => {
 router.get('/:clinicId', async (req, res)=> {
   try {
     const clinic = await Clinic.findById(req.params.clinicId)
-      .populate('reviews.user', 'firstName lastName')
+      .populate('reviews.user', 'username')
 
     if (!clinic) {
       return res.status(404).json({err: 'Clinic not found'});
@@ -267,17 +267,180 @@ router.put('/:clinicId', verifyToken, async (req, res) => {
 router.delete('/:clinicId', verifyToken, async (req, res) => {
   try {
     const clinic = await Clinic.findByIdAndDelete(req.params.clinicId);
-
     if (!clinic) {
-      return res.status(404).json({err: 'Clinic not found'});
+      return res.status(404).json({err:'Clinic not found'});
     }
 
-      res.json({ message: 'Clinic deleted successfully'});
+      res.json({message:'Clinic deleted successfully'});
   } catch (err) {
-      if (err.kind === 'ObjectId') {
-        return res.status(404).json({err: 'Clinic not found'});
+      if (err.kind ==='ObjectId') {
+        return res.status(404).json({err:'Clinic not found'});
       }
       res.status(500).json({ err: err.message});
+  }
+});
+
+
+router.get('/:clinicId/reviews', async (req, res) => {
+  try {
+    const clinic = await Clinic.findById(req.params.clinicId)
+      .select('reviews averageRating')
+      .populate('reviews.user', 'username');
+
+    if (!clinic) {
+      return res.status(404).json({err:'Clinic not found'});
+    }
+
+    res.json({
+      success: true,
+      count: clinic.reviews.length,
+      averageRating: clinic.averageRating,
+      data: clinic.reviews
+    });
+  } catch (err) {
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({err:'Clinic not found'});
+    }
+    res.status(500).json({ err: err.message });
+  }
+});
+
+router.post('/:clinicId/reviews',verifyToken, async(req, res)=> {
+  try {
+    const {rating,comment} = req.body;
+    const userId = req.user._id;
+    
+    if (!userId) {
+      return res.status(401).json({err: 'User not authenticated'});
+    }
+    if (!rating || rating <1 || rating >5) {
+      return res.status(400).json({err:'Rating must be between 1 and 5'});
+    }
+    const clinic = await Clinic.findById(req.params.clinicId);
+
+    if (!clinic) {
+      return res.status(404).json({err:'Clinic not found'});
+    }
+    const existingReview = clinic.reviews.find(
+      review => review.user.toString() ===userId.toString()
+    );
+    if (existingReview) {
+      return res.status(400).json({err:'You have already reviewed this clinic'});
+    }
+
+    const newReview = {
+      user: userId,
+      rating: parseInt(rating),
+      comment: comment || ''
+    };
+    clinic.reviews.push(newReview);
+
+    await clinic.save();
+    await clinic.populate('reviews.user','username');
+    const addedReview = clinic.reviews[clinic.reviews.length - 1];
+
+    res.status(201).json({
+      success: true,
+      message: 'Review added successfully',
+      data: addedReview,
+      averageRating: clinic.averageRating
+    });
+  } catch (err) {
+    console.error('err:', err);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({err:'Clinic not found'});
+    }
+    res.status(500).json({err: err.message});
+  }
+});
+
+router.put('/:clinicId/reviews/:reviewId', verifyToken, async (req,res)=> {
+  try {
+    const {rating, comment} =req.body;
+    const userId = req.user._id;
+    
+    if (!userId) {
+      return res.status(401).json({err:'User not authenticated'});
+    }
+
+    const clinic = await Clinic.findById(req.params.clinicId);
+
+    if (!clinic) {
+      return res.status(404).json({err:'Clinic not found'});
+    }
+    const review = clinic.reviews.id(req.params.reviewId);
+
+    if (!review) {
+      return res.status(404).json({err:'Review not found'});
+    }
+    if (review.user.toString() !== userId.toString()) {
+      return res.status(403).json({err:'You can only edit your own reviews'});
+    }
+
+    if (rating) {
+      if (rating < 1 || rating > 5) {
+        return res.status(400).json({err:'Rating must be between 1 and 5'});
+      }
+      review.rating = parseInt(rating);
+    }
+    if (comment !== undefined) {
+      review.comment = comment;
+    }
+
+    await clinic.save();
+    await clinic.populate('reviews.user', 'username');
+
+    res.json({
+      success: true,
+      message: 'Review updated successfully',
+      data: review,
+      averageRating: clinic.averageRating
+    });
+  } catch (err) {
+    console.error('err:', err);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({err:'Clinic or review not found'});
+    }
+    res.status(500).json({ err: err.message });
+  }
+});
+
+router.delete('/:clinicId/reviews/:reviewId', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    
+    if (!userId) {
+      return res.status(401).json({err:'User not authenticated'});
+    }
+    const clinic = await Clinic.findById(req.params.clinicId);
+
+    if (!clinic) {
+      return res.status(404).json({err:'Clinic not found'});
+    }
+
+    const review = clinic.reviews.id(req.params.reviewId);
+    if (!review) {
+      return res.status(404).json({err:'Review not found'});
+    }
+
+    if (review.user.toString() !==userId.toString()) {
+      return res.status(403).json({err:'You can only delete your own reviews'});
+    }
+    clinic.reviews.pull(req.params.reviewId);
+
+    await clinic.save();
+
+    res.json({
+      success: true,
+      message: 'Review deleted successfully',
+      averageRating: clinic.averageRating
+    });
+  } catch (err) {
+    console.error('err:', err);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({err:'Clinic or review not found'});
+    }
+    res.status(500).json({ err: err.message });
   }
 });
 
